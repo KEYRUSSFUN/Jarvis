@@ -1,0 +1,29 @@
+# Настройки Jarvis. Всё, что здесь не указано, берётся по умолчанию из src/jarvis/config.py.
+
+[assistant]
+hotkey = "ctrl_r"        # держите правый Ctrl и говорите; любое имя из pynput.keyboard.Key
+dry_run = false          # true — инструменты только пишут в лог, ничего не делают
+max_steps = 5
+
+[stt]
+model = "large-v3-turbo"
+device = "cuda"          # если CUDA не заведётся, Jarvis сам перейдёт на CPU
+compute_type = "int8_float16"
+# Слова, которые Whisper должен узнавать в первую очередь: названия ваших программ
+hotwords = "Jarvis, Telegram, Discord, Яндекс Музыка, YouTube, Visual Studio Code"
+
+[llm]
+model = "qwen3:8b"
+temperature = 0.2
+
+[tts]
+speaker = "eugene"       # голоса v4_ru: aidar, eugene (мужские), baya, kseniya, xenia (женские)
+
+[web]
+search_url = "https://yandex.ru/search/?text={query}"
+
+# Свои названия для приложений: «как говорю» = «как называется в меню Пуск»
+[apps.aliases]
+"параметры" = "Настройки"
+"телега" = "Telegram"
+"музыка" = "Яндекс.Музыка"
