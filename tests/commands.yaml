@@ -1,0 +1,118 @@
+# Набор команд для проверки модели и промпта: uv run pytest -m llm
+# Команды записаны так, как их выдаёт распознавание речи.
+# Строковые аргументы сравниваются нечётко (как поиск приложений), числа — точно
+# или условием ">0" / "<0". expect: null — инструмент вызываться не должен.
+
+# Приложения
+- say: Открой Telegram
+  expect: {tool: open_app, args: {app: Telegram}}
+- say: открой телеграм
+  expect: {tool: open_app, args: {app: Telegram}}
+- say: Запусти блокнот.
+  expect: {tool: open_app, args: {app: Блокнот}}
+- say: Открой калькулятор.
+  expect: {tool: open_app, args: {app: Калькулятор}}
+- say: Можешь открыть дискорд?
+  expect: {tool: open_app, args: {app: Discord}}
+- say: Открой проводник
+  expect: {tool: open_app, args: {app: Проводник}}
+- say: Открой настройки.
+  expect: {tool: open_app, args: {app: настройки}}
+- say: Открой браузер
+  expect: {tool: open_app, args: {app: браузер}}
+- say: Открой Интернет Эксплорер
+  expect: {tool: open_app, args: {app: Интернет Эксплорер}}
+- say: Открой VS Code
+  expect: {tool: open_app, args: {app: Visual Studio Code}}
+- say: Закрой блокнот.
+  expect: {tool: close_app, args: {app: Блокнот}}
+- say: Закрой телеграм
+  expect: {tool: close_app, args: {app: Telegram}}
+
+# Громкость
+- say: Сделай громкость 50%.
+  expect: {tool: set_volume, args: {percent: 50}}
+- say: Громкость на тридцать
+  expect: {tool: set_volume, args: {percent: 30}}
+- say: Громкость 75
+  expect: {tool: set_volume, args: {percent: 75}}
+- say: Поставь громкость на максимум.
+  expect: {tool: set_volume, args: {percent: 100}}
+- say: Сделай погромче.
+  expect: {tool: change_volume, args: {delta: ">0"}}
+- say: Потише
+  expect: {tool: change_volume, args: {delta: "<0"}}
+- say: Сделай тише на 20 процентов.
+  expect: {tool: change_volume, args: {delta: -20}}
+- say: Выключи звук.
+  expect: {tool: mute}
+- say: Включи звук обратно
+  expect: {tool: unmute}
+
+# Плеер
+- say: Пауза
+  expect: {tool: media_control, args: {action: play_pause}}
+- say: Поставь на паузу.
+  expect: {tool: media_control, args: {action: play_pause}}
+- say: Продолжи воспроизведение
+  expect: {tool: media_control, args: {action: play_pause}}
+- say: Следующий трек.
+  expect: {tool: media_control, args: {action: next}}
+- say: Включи предыдущую песню
+  expect: {tool: media_control, args: {action: previous}}
+
+# Интернет
+- say: Открой ютуб.
+  expect: {tool: open_url, args: {url: youtube.com}}
+- say: Открой сайт github.com
+  expect: {tool: open_url, args: {url: github.com}}
+- say: Найди в интернете погоду в Москве.
+  expect: {tool: web_search, args: {query: погода Москва}}
+- say: Загугли рецепт блинов
+  expect: {tool: web_search, args: {query: рецепт блинов}}
+- say: Поищи, кто такой Тесла.
+  expect: {tool: web_search, args: {query: Тесла}}
+
+# Файлы, ввод, клавиши
+- say: Открой отчёт
+  expect: {tool: open_file, args: {name: отчёт}}
+- say: Открой файл список покупок
+  expect: {tool: open_file, args: {name: список покупок}}
+- say: Запусти Warframe
+  expect: {tool: open_app, args: {app: Warframe}}
+- say: Напечатай привет, как дела
+  expect: {tool: type_text, args: {text: привет, как дела}}
+- say: Сохрани
+  expect: {tool: press_keys, args: {keys: ctrl+s}}
+- say: Нажми энтер
+  expect: {tool: press_keys, args: {keys: enter}}
+- say: Закрой Steam
+  expect: {tool: close_app, args: {app: Steam}}
+
+# Система
+- say: Который час?
+  expect: {tool: get_datetime}
+- say: Какое сегодня число?
+  expect: {tool: get_datetime}
+- say: Какой сегодня день недели
+  expect: {tool: get_datetime}
+- say: Как загружен процессор?
+  expect: {tool: system_info}
+- say: Сколько свободной памяти?
+  expect: {tool: system_info}
+- say: Сколько места на диске?
+  expect: {tool: system_info}
+- say: Выключи компьютер.
+  expect: {tool: power, args: {action: выключить}}
+- say: Перезагрузи компьютер
+  expect: {tool: power, args: {action: перезагрузить}}
+
+# Разговор без инструментов
+- say: Привет, как дела?
+  expect: null
+- say: Расскажи анекдот.
+  expect: null
+- say: Спасибо
+  expect: null
+- say: Кто ты?
+  expect: null

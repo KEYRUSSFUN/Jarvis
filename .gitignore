@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Jarvis: скачанные модели и логи
+models/
+logs/
