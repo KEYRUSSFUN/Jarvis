@@ -11,6 +11,8 @@ class AssistantConfig:
     dry_run: bool = False  # инструменты только пишут в лог, ничего не делают
     max_steps: int = 5
     min_record_seconds: float = 0.3  # случайное короткое нажатие не считается командой
+    memory_turns: int = 16  # сколько команд с ответами помнить; при переполнении остаётся половина
+    memory_minutes: float = 5  # после такой паузы разговор начинается заново
 
 
 @dataclass
@@ -28,13 +30,24 @@ class LLMConfig:
     host: str = "http://127.0.0.1:11434"
     keep_alive: str = "30m"
     temperature: float = 0.2
+    # Промпт с инструментами ~1400 токенов, остальное — память разговора. Контекст 4096 с обычным
+    # кэшем вместе с Whisper не помещается в 8 ГБ: часть модели уходит в общую память, и ответ
+    # замедляется в 2–5 раз. Поэтому Ollama запускается с 8-битным кэшем (см. README):
+    # OLLAMA_KV_CACHE_TYPE=q8_0 и OLLAMA_FLASH_ATTENTION=1. Без них ставьте 2048.
+    num_ctx: int = 4096
 
 
 @dataclass
 class TTSConfig:
-    model_url: str = "https://models.silero.ai/models/tts/ru/v4_ru.pt"
-    speaker: str = "eugene"
+    # Silero v5: в v5_cis_base 30 русских голосов. ru_alexandr — баритон около 120 Гц с самой
+    # ровной интонацией из всех, ближе всего к Джарвису из «Железного человека».
+    model_url: str = "https://models.silero.ai/models/tts/ru/v5_cis_base.pt"
+    speaker: str = "ru_alexandr"
+    pitch: str = "medium"  # SSML: x-low, low, medium, high, x-high
+    rate: str = "medium"  # SSML: x-slow, slow, medium, fast, x-fast
     sample_rate: int = 48000
+    metal: float = 0.35  # металлический призвук, 0 — выключен
+    room: float = 0.25  # эхо небольшого помещения, 0 — выключено
 
 
 @dataclass

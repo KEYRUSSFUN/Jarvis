@@ -1,23 +1,32 @@
 # Настройки Jarvis. Всё, что здесь не указано, берётся по умолчанию из src/jarvis/config.py.
 
 [assistant]
-hotkey = "ctrl_r"        # держите правый Ctrl и говорите; любое имя из pynput.keyboard.Key
+hotkey = "ctrl_l"        # держите левый Ctrl и говорите; любое имя из pynput.keyboard.Key
 dry_run = false          # true — инструменты только пишут в лог, ничего не делают
 max_steps = 5
+memory_turns = 16        # сколько команд с ответами он помнит; при переполнении остаётся половина
+memory_minutes = 5       # после такой паузы разговор начинается заново
 
 [stt]
 model = "large-v3-turbo"
 device = "cuda"          # если CUDA не заведётся, Jarvis сам перейдёт на CPU
 compute_type = "int8_float16"
 # Слова, которые Whisper должен узнавать в первую очередь: названия ваших программ
-hotwords = "Jarvis, Telegram, Discord, Яндекс Музыка, YouTube, Visual Studio Code"
+hotwords = "Jarvis, Telegram, Discord, Яндекс Музыка, YouTube, Visual Studio Code, Steam"
 
 [llm]
 model = "qwen3:8b"
 temperature = 0.2
 
 [tts]
-speaker = "eugene"       # голоса v4_ru: aidar, eugene (мужские), baya, kseniya, xenia (женские)
+# Мужские голоса v5_cis_base: ru_alexandr, ru_roman, ru_miyau, ru_safarhuja, ru_dmitriy, ru_bogdan …
+# Голоса eugene и aidar — в другой модели: model_url = "https://models.silero.ai/models/tts/ru/v5_6_ru.pt"
+model_url = "https://models.silero.ai/models/tts/ru/v5_cis_base.pt"
+speaker = "ru_alexandr"
+pitch = "medium"         # высота: x-low, low, medium, high, x-high
+rate = "medium"          # темп: x-slow, slow, medium, fast, x-fast
+metal = 0.35             # металлический призвук «как из динамика», 0 — выключен
+room = 0.25              # эхо помещения, 0 — выключено
 
 [web]
 search_url = "https://yandex.ru/search/?text={query}"

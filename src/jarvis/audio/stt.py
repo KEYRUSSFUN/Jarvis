@@ -45,9 +45,11 @@ class SpeechRecognizer:
         # Ошибки cuDNN и долгая инициализация ядер (~4 с) случаются при первом декодировании.
         # VAD вырезал бы тишину целиком и декодер бы не запустился, поэтому здесь он выключен;
         # segments — ленивый генератор, list() заставляет декодировать.
-        segments, _info = self._model.transcribe(
-            np.zeros(16000, dtype=np.float32), language=self._config.language, vad_filter=False
-        )
+        silence = np.zeros(16000, dtype=np.float32)
+        segments, _info = self._model.transcribe(silence, language=self._config.language, vad_filter=False)
+        list(segments)
+        # Модель VAD грузится при первом вызове с vad_filter=True (~0,5 с) — тоже заранее.
+        segments, _info = self._model.transcribe(silence, language=self._config.language, vad_filter=True)
         list(segments)
 
     def transcribe(self, audio: np.ndarray) -> str:

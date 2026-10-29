@@ -1,11 +1,14 @@
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 
 from jarvis.safety import ToolExecutor
 from jarvis.tools import apps, media, system, web
 from jarvis.tools.apps import AppEntry, Window
-from jarvis.tools.registry import Risk, ToolRegistry
+from jarvis.tools.files import FileEntry, LaunchLog
+from jarvis.tools.registry import Risk, ToolRegistry, ToolResult
+from test_files import FakeFiles
 
 
 def executor_for(register, *args, **kwargs) -> tuple[ToolExecutor, ToolRegistry]:
@@ -21,15 +24,19 @@ class FakeApps:
             AppEntry("Google Chrome", "Chrome"),
             AppEntry("Блокнот", "Microsoft.WindowsNotepad_8wekyb3d8bbwe!App"),
         ]
-        self.open_windows = [Window(101, "Без имени — Блокнот"), Window(202, "Telegram")]
+        self.open_windows = [Window(101, "Без имени — Блокнот", 0), Window(202, "Telegram", 0)]
         self.launched: list[str] = []
         self.closed: list[int] = []
+        self.browser_opened = 0
 
     def start_apps(self) -> list[AppEntry]:
         return self.entries
 
     def launch(self, app_id: str) -> None:
         self.launched.append(app_id)
+
+    def open_browser(self) -> None:
+        self.browser_opened += 1
 
     def windows(self) -> list[Window]:
         return self.open_windows
@@ -60,6 +67,46 @@ class TestApps:
         assert result.speech is None
         assert backend.launched == []
 
+    @pytest.mark.parametrize("app", ["Интернет Эксплорер", "Internet Explorer", "браузер", "интернет"])
+    def test_open_app_opens_default_browser_for_any_browser_request(self, app):
+        # Internet Explorer в Windows 11 удалён: просят его, чтобы попасть в интернет.
+        backend = FakeApps()
+        executor, _ = executor_for(apps.register, backend, aliases={})
+        result = executor.execute("open_app", {"app": app})
+        assert backend.browser_opened == 1
+        assert backend.launched == []
+        assert result.speech == "Открываю браузер."
+
+    def test_open_app_does_not_replace_missing_named_browser_with_default(self):
+        backend = FakeApps()
+        executor, _ = executor_for(apps.register, backend, aliases={})
+        result = executor.execute("open_app", {"app": "Опера"})
+        assert not result.ok
+        assert backend.browser_opened == 0
+
+    def test_open_app_falls_back_to_desktop_shortcut(self):
+        backend, shortcuts, launched = FakeApps(), FakeFiles([FileEntry("Warframe", Path("Warframe.url"))]), LaunchLog()
+        executor, _ = executor_for(apps.register, backend, aliases={}, files=shortcuts, launched=launched)
+        result = executor.execute("open_app", {"app": "Warframe"})
+        assert shortcuts.opened == [Path("Warframe.url")]
+        assert backend.launched == []
+        assert result.speech == "Открываю Warframe."
+        assert launched.recent(20)
+
+    def test_open_app_ignores_non_shortcut_files(self):
+        shortcuts = FakeFiles([FileEntry("Warframe", Path("Warframe.docx"))])
+        executor, _ = executor_for(apps.register, FakeApps(), aliases={}, files=shortcuts)
+        assert not executor.execute("open_app", {"app": "Warframe"}).ok
+        assert shortcuts.opened == []
+
+    def test_open_app_prefers_start_menu_over_shortcut(self):
+        backend, shortcuts, launched = FakeApps(), FakeFiles([FileEntry("Telegram", Path("Telegram.lnk"))]), LaunchLog()
+        executor, _ = executor_for(apps.register, backend, aliases={}, files=shortcuts, launched=launched)
+        executor.execute("open_app", {"app": "телеграм"})
+        assert backend.launched == ["TelegramDesktop.exe_id"]
+        assert shortcuts.opened == []
+        assert launched.recent(20)
+
     def test_close_app_closes_matching_window(self):
         backend = FakeApps()
         executor, _ = executor_for(apps.register, backend, aliases={})
@@ -73,6 +120,31 @@ class TestApps:
         result = executor.execute("close_app", {"app": "калькулятор"})
         assert not result.ok
         assert backend.closed == []
+
+    def test_close_app_falls_back_to_background_program(self):
+        backend, asked = FakeApps(), []
+
+        def close_background(app):
+            asked.append(app)
+            return ToolResult(ok=True, speech="Закрываю Steam.")
+
+        executor, _ = executor_for(apps.register, backend, aliases={}, close_background=close_background)
+        result = executor.execute("close_app", {"app": "стим"})
+        assert asked == ["стим"]
+        assert backend.closed == []
+        assert result.speech == "Закрываю Steam."
+
+    def test_close_app_background_miss_keeps_not_found_error(self):
+        executor, _ = executor_for(apps.register, FakeApps(), aliases={}, close_background=lambda app: None)
+        result = executor.execute("close_app", {"app": "калькулятор"})
+        assert not result.ok
+        assert "не найдено" in result.error
+
+    def test_close_app_prefers_visible_window_over_background(self):
+        backend = FakeApps()
+        executor, _ = executor_for(apps.register, backend, aliases={}, close_background=lambda app: 1 / 0)
+        assert executor.execute("close_app", {"app": "блокнот"}).ok
+        assert backend.closed == [101]
 
 
 class FakeVolume:

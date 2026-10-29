@@ -5,6 +5,7 @@
 """
 
 import re
+from dataclasses import dataclass
 
 from rapidfuzz import fuzz
 
@@ -40,6 +41,28 @@ def _score(query: str, name: str) -> tuple[float, float]:
     return max(_words_score(q, n) for q, n in pairs), max(fuzz.ratio(q, n) for q, n in pairs)
 
 
+@dataclass(frozen=True)
+class Match:
+    name: str
+    words: float  # совпадение по словам: по нему порог MIN_SCORE
+    whole: float  # сходство строк целиком: «клиент» и «Happ Proxy Client» совпадают словом, но не целиком
+
+
+def best_match(query: str, names: list[str]) -> Match | None:
+    """Самое похожее название вместе с баллами; None — если даже оно ниже порога."""
+    query = query.strip()
+    if not query:
+        return None
+    best_name, best_score = None, (0.0, 0.0)
+    for name in names:
+        score = _score(query, name)
+        if score > best_score:
+            best_name, best_score = name, score
+    if best_name is None or best_score[0] < MIN_SCORE:
+        return None
+    return Match(best_name, *best_score)
+
+
 def find_best(query: str, names: list[str], aliases: dict[str, str] | None = None) -> str | None:
     query = query.strip()
     if not query:
@@ -49,9 +72,5 @@ def find_best(query: str, names: list[str], aliases: dict[str, str] | None = Non
     if target in names:
         return target
 
-    best_name, best_score = None, (0.0, 0.0)
-    for name in names:
-        score = _score(query, name)
-        if score > best_score:
-            best_name, best_score = name, score
-    return best_name if best_score[0] >= MIN_SCORE else None
+    match = best_match(query, names)
+    return match.name if match is not None else None

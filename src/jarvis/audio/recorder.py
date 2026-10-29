@@ -95,13 +95,14 @@ class PushToTalk:
             log.debug("Микрофон: %s", status)
         self._buffer.add(indata[:, 0])
 
-    def _on_press(self, key) -> None:
-        if key == self._key:
+    def _on_press(self, key, injected: bool = False) -> None:
+        # injected — нажатие сделала программа (в т. ч. сам Джарвис через SendInput), а не человек.
+        if not injected and key == self._key:
             self._buffer.start()
             self._on_press_hook()
 
-    def _on_release(self, key) -> None:
-        if key == self._key:
+    def _on_release(self, key, injected: bool = False) -> None:
+        if not injected and key == self._key:
             audio = self._buffer.stop()
             if audio is not None:
                 self._utterances.put(audio)

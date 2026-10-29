@@ -2,10 +2,12 @@
 
 import argparse
 import logging
+import random
 import time
 from pathlib import Path
 
 from jarvis.agent import Agent
+from jarvis.audio.effects import VoiceEffects
 from jarvis.audio.recorder import PushToTalk
 from jarvis.audio.stt import SpeechRecognizer
 from jarvis.audio.tts import SileroSynthesizer, SoundDevicePlayer, Speaker
@@ -20,6 +22,8 @@ log = logging.getLogger("jarvis")
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
 CONFIRM_TIMEOUT_SECONDS = 20  # нет ответа — считаем отказом
+# Звучат сразу после распознавания, пока модель думает: команда принята, работа идёт.
+ACKNOWLEDGEMENTS = ("Да, сэр.", "Сейчас, сэр.", "Секунду, сэр.")
 
 
 def setup_logging(log_dir: Path) -> None:
@@ -45,12 +49,19 @@ def main() -> None:
 
     log.info("Загружаю модели…")
     synthesizer = SileroSynthesizer(
-        config.tts.model_url, config.tts.speaker, config.tts.sample_rate, PROJECT_DIR / "models"
+        config.tts.model_url,
+        config.tts.speaker,
+        config.tts.sample_rate,
+        PROJECT_DIR / "models",
+        config.tts.pitch,
+        config.tts.rate,
     )
-    speaker = Speaker(synthesizer, SoundDevicePlayer(config.tts.sample_rate))
+    effects = VoiceEffects(config.tts.sample_rate, config.tts.metal, config.tts.room)
+    speaker = Speaker(lambda text: effects(synthesizer(text)), SoundDevicePlayer(config.tts.sample_rate))
     recognizer = SpeechRecognizer(config.stt)
-    llm = OllamaChat(config.llm.model, config.llm.host, config.llm.keep_alive, config.llm.temperature)
-    llm.warm_up()
+    llm = OllamaChat(
+        config.llm.model, config.llm.host, config.llm.keep_alive, config.llm.temperature, config.llm.num_ctx
+    )
 
     # Нажатие клавиши обрывает речь Jarvis — можно перебить его новой командой.
     push_to_talk = PushToTalk(config.assistant.hotkey, config.assistant.min_record_seconds, on_press=speaker.stop)
@@ -65,14 +76,25 @@ def main() -> None:
         log.info("Подтверждение «%s» → «%s»", prompt, answer)
         return is_confirmation(answer)
 
-    registry = build_registry(config)
+    registry = build_registry(config, preload=True)
+    llm.warm_up(
+        [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": "Привет"}], registry.schemas()
+    )
     executor = ToolExecutor(registry, confirm, dry_run=dry_run)
-    agent = Agent(llm, registry, executor, SYSTEM_PROMPT, max_steps=config.assistant.max_steps)
+    agent = Agent(
+        llm,
+        registry,
+        executor,
+        SYSTEM_PROMPT,
+        max_steps=config.assistant.max_steps,
+        memory_turns=config.assistant.memory_turns,
+        memory_seconds=config.assistant.memory_minutes * 60,
+    )
 
     push_to_talk.start()
     mode = " (dry-run: команды не выполняются)" if dry_run else ""
     log.info("Готов. Держите %s и говорите команду%s. Выход — Ctrl+C.", config.assistant.hotkey, mode)
-    speaker.say("Jarvis на связи.")
+    speaker.say("Jarvis на связи, сэр.")
     try:
         while True:
             audio = push_to_talk.record()
@@ -82,6 +104,7 @@ def main() -> None:
             log.info("Команда: %r (распознавание %.0f мс)", text, (recognized - released) * 1000)
             if not text:
                 continue
+            speaker.say(random.choice(ACKNOWLEDGEMENTS))
 
             first_sentence: list[float] = []
 

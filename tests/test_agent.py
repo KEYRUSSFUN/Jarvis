@@ -23,7 +23,15 @@ class ScriptedLLM:
         yield from self._responses.pop(0)
 
 
-def make_agent(llm, max_steps: int = 5) -> tuple[Agent, list]:
+class FakeClock:
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def make_agent(llm, max_steps: int = 5, **memory) -> tuple[Agent, list]:
     calls: list = []
     registry = ToolRegistry()
 
@@ -43,7 +51,7 @@ def make_agent(llm, max_steps: int = 5) -> tuple[Agent, list]:
         return ToolResult(ok=True, data={"cpu_percent": 12})
 
     executor = ToolExecutor(registry, confirm=lambda prompt: True)
-    return Agent(llm, registry, executor, SYSTEM, max_steps=max_steps), calls
+    return Agent(llm, registry, executor, SYSTEM, max_steps=max_steps, **memory), calls
 
 
 def run(agent: Agent, text: str) -> list[str]:
@@ -133,3 +141,67 @@ def test_gives_up_after_max_steps():
 def test_empty_answer_says_not_understood():
     agent, _ = make_agent(ScriptedLLM([]))
     assert run(agent, "эээ") == [NOT_UNDERSTOOD]
+
+
+class TestMemory:
+    def test_next_command_sees_previous_dialog_with_tools_and_answer(self):
+        llm = ScriptedLLM([ToolCall("open_app", {"app": "Telegram"})], [TextDelta("Закрываю.")])
+        agent, _ = make_agent(llm)
+        run(agent, "открой телеграм")
+        run(agent, "закрой его")
+
+        second = llm.requests[1]
+        assert [m["role"] for m in second] == ["system", "user", "assistant", "tool", "assistant", "user"]
+        assert second[1] == {"role": "user", "content": "открой телеграм"}
+        assert second[2]["tool_calls"] == [{"function": {"name": "open_app", "arguments": {"app": "Telegram"}}}]
+        assert second[4] == {"role": "assistant", "content": "Открываю Telegram."}
+        assert second[5] == {"role": "user", "content": "закрой его"}
+
+    def test_text_answer_is_remembered(self):
+        llm = ScriptedLLM([TextDelta("Меня зовут Jarvis.")], [TextDelta("Jarvis.")])
+        agent, _ = make_agent(llm)
+        run(agent, "как тебя зовут")
+        run(agent, "повтори")
+        assert llm.requests[1][1:] == [
+            {"role": "user", "content": "как тебя зовут"},
+            {"role": "assistant", "content": "Меня зовут Jarvis."},
+            {"role": "user", "content": "повтори"},
+        ]
+
+    def test_dialog_is_forgotten_after_a_pause(self):
+        clock = FakeClock()
+        llm = ScriptedLLM([TextDelta("Да.")], [TextDelta("Да.")])
+        agent, _ = make_agent(llm, memory_seconds=300, clock=clock)
+        run(agent, "ты тут?")
+        clock.now += 301
+        run(agent, "а сейчас?")
+        assert llm.requests[1] == [
+            {"role": "system", "content": SYSTEM},
+            {"role": "user", "content": "а сейчас?"},
+        ]
+
+    def test_dialog_is_kept_within_the_pause(self):
+        clock = FakeClock()
+        llm = ScriptedLLM([TextDelta("Да.")], [TextDelta("Да.")])
+        agent, _ = make_agent(llm, memory_seconds=300, clock=clock)
+        run(agent, "ты тут?")
+        clock.now += 299
+        run(agent, "а сейчас?")
+        assert len(llm.requests[1]) == 4
+
+    def test_old_turns_are_dropped_in_batches(self):
+        # Начало переписки меняется редко, и Ollama не пересчитывает его на каждой команде.
+        llm = ScriptedLLM(*([TextDelta(f"Ответ {i}.")] for i in range(7)))
+        agent, _ = make_agent(llm, memory_turns=4)
+        for i in range(7):
+            run(agent, f"вопрос {i}")
+        remembered = [[m["content"] for m in request if m["role"] == "user"][:-1] for request in llm.requests]
+        assert remembered == [
+            [],
+            ["вопрос 0"],
+            ["вопрос 0", "вопрос 1"],
+            ["вопрос 0", "вопрос 1", "вопрос 2"],
+            ["вопрос 0", "вопрос 1", "вопрос 2", "вопрос 3"],
+            ["вопрос 3", "вопрос 4"],
+            ["вопрос 3", "вопрос 4", "вопрос 5"],
+        ]

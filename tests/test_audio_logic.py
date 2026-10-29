@@ -2,9 +2,11 @@ import threading
 
 import numpy as np
 import pytest
+from pynput import keyboard
 
+from jarvis.audio import recorder
 from jarvis.audio.recorder import UtteranceBuffer
-from jarvis.audio.tts import Speaker
+from jarvis.audio.tts import Speaker, to_ssml
 from jarvis.dialog import is_confirmation
 
 
@@ -97,6 +99,12 @@ class TestSpeaker:
         assert player.played == ["Да."]
 
 
+def test_ssml_sets_voice_and_escapes_text():
+    assert to_ssml("Том & Джерри <3", pitch="low", rate="medium") == (
+        '<speak><prosody pitch="low" rate="medium">Том &amp; Джерри &lt;3</prosody></speak>'
+    )
+
+
 @pytest.mark.parametrize(
     ("answer", "confirmed"),
     [
@@ -115,3 +123,14 @@ class TestSpeaker:
 )
 def test_voice_confirmation(answer, confirmed):
     assert is_confirmation(answer) is confirmed
+
+
+def test_injected_hotkey_presses_are_ignored(monkeypatch):
+    # Нажатия, которые Джарвис сам отправил через SendInput, не должны запускать запись.
+    monkeypatch.setattr(recorder.sd, "InputStream", lambda **kwargs: None)
+    presses = []
+    ptt = recorder.PushToTalk("ctrl_l", 0.0, on_press=lambda: presses.append(1))
+    ptt._on_press(keyboard.Key.ctrl_l, True)
+    assert presses == []
+    ptt._on_press(keyboard.Key.ctrl_l, False)
+    assert presses == [1]

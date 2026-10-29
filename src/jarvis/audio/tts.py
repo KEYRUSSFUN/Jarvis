@@ -9,6 +9,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urlparse
+from xml.sax.saxutils import escape
 
 import numpy as np
 import sounddevice as sd
@@ -65,10 +66,17 @@ class Speaker:
                 self._queue.task_done()
 
 
+def to_ssml(text: str, pitch: str, rate: str) -> str:
+    """Высоту и темп голоса Silero меняет только через SSML-разметку."""
+    return f'<speak><prosody pitch="{pitch}" rate="{rate}">{escape(text)}</prosody></speak>'
+
+
 class SileroSynthesizer:
     """Silero TTS на CPU. Модель скачивается один раз в models/."""
 
-    def __init__(self, model_url: str, speaker: str, sample_rate: int, cache_dir: Path) -> None:
+    def __init__(
+        self, model_url: str, speaker: str, sample_rate: int, cache_dir: Path, pitch: str, rate: str
+    ) -> None:
         import torch
 
         path = cache_dir / Path(urlparse(model_url).path).name
@@ -80,11 +88,21 @@ class SileroSynthesizer:
         self._model = torch.package.PackageImporter(str(path)).load_pickle("tts_models", "model")
         self._model.to(torch.device("cpu"))
         self._speaker = speaker
+        self._pitch = pitch
+        self._rate = rate
         self.sample_rate = sample_rate
+        # TorchScript оптимизирует модель на первых двух запусках, каждый ~2 с.
+        # Пусть это случится при загрузке, а не на первом ответе.
+        for _ in range(2):
+            self("Проверка связи.")
 
     def __call__(self, text: str) -> np.ndarray:
         audio = self._model.apply_tts(
-            text=text, speaker=self._speaker, sample_rate=self.sample_rate, put_accent=True, put_yo=True
+            ssml_text=to_ssml(text, self._pitch, self._rate),
+            speaker=self._speaker,
+            sample_rate=self.sample_rate,
+            put_accent=True,
+            put_yo=True,
         )
         return audio.numpy()
 

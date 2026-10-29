@@ -1,7 +1,8 @@
 """Прогон набора команд через настоящую модель: uv run pytest -m llm
 
 Проверяет связку «модель + системный промпт + описания инструментов»:
-какой инструмент модель вызывает первым и с какими аргументами.
+какой инструмент модель вызывает первым и с какими аргументами,
+а в диалогах — помнит ли она предыдущие команды.
 Инструменты не выполняются.
 """
 
@@ -10,19 +11,23 @@ from pathlib import Path
 import pytest
 import yaml
 
+from jarvis.agent import Agent
+from jarvis.audio.text_norm import normalize_for_speech
 from jarvis.config import Config
-from jarvis.llm import OllamaChat, ToolCall
+from jarvis.llm import OllamaChat, TextDelta, ToolCall
 from jarvis.prompts import SYSTEM_PROMPT
 from jarvis.tools import build_registry
 from jarvis.tools.matching import find_best
+from jarvis.tools.registry import ToolResult
 
 CASES = yaml.safe_load((Path(__file__).parent / "commands.yaml").read_text(encoding="utf-8"))
+DIALOGS = yaml.safe_load((Path(__file__).parent / "dialogs.yaml").read_text(encoding="utf-8"))
 
 
 @pytest.fixture(scope="module")
 def llm() -> OllamaChat:
     config = Config().llm
-    chat = OllamaChat(config.model, config.host, config.keep_alive, config.temperature)
+    chat = OllamaChat(config.model, config.host, config.keep_alive, config.temperature, config.num_ctx)
     try:
         chat.warm_up()
     except Exception as exc:
@@ -48,13 +53,7 @@ def arg_matches(actual, expected) -> bool:
     return actual == expected
 
 
-@pytest.mark.llm
-@pytest.mark.parametrize("case", CASES, ids=[case["say"] for case in CASES])
-def test_command(case, llm, schemas):
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": case["say"]}]
-    calls = [event for event in llm.stream(messages, schemas) if isinstance(event, ToolCall)]
-    expect = case["expect"]
-
+def check_first_call(calls: list[ToolCall], expect: dict | None) -> None:
     if expect is None:
         assert calls == [], f"не ждали инструментов, а модель вызвала {calls}"
         return
@@ -64,3 +63,56 @@ def test_command(case, llm, schemas):
     assert call.name == expect["tool"], f"вызван {call.name}({call.args})"
     for name, expected in expect.get("args", {}).items():
         assert arg_matches(call.args.get(name), expected), f"{name}={call.args.get(name)!r}, ждали {expected!r}"
+
+
+@pytest.mark.llm
+@pytest.mark.parametrize("case", CASES, ids=[case["say"] for case in CASES])
+def test_command(case, llm, schemas):
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": case["say"]}]
+    calls = [event for event in llm.stream(messages, schemas) if isinstance(event, ToolCall)]
+    check_first_call(calls, case["expect"])
+
+
+class RecordingChat:
+    """Пропускает ответы модели насквозь и запоминает их — чтобы проверить ответ на последнюю команду."""
+
+    def __init__(self, llm: OllamaChat) -> None:
+        self._llm = llm
+        self.responses: list[list] = []
+
+    def stream(self, messages, tools):
+        events = list(self._llm.stream(messages, tools))
+        self.responses.append(events)
+        yield from events
+
+
+class SucceedingExecutor:
+    """Каждый инструмент «выполняется» успешно, ничего не делая на компьютере."""
+
+    def execute(self, name, args):
+        return ToolResult(ok=True, data=args, speech="Выполнено.")
+
+
+@pytest.mark.llm
+@pytest.mark.parametrize("case", DIALOGS, ids=[" → ".join(case["dialog"]) for case in DIALOGS])
+def test_dialog(case, llm):
+    registry = build_registry(Config())
+    chat = RecordingChat(llm)
+    agent = Agent(chat, registry, SucceedingExecutor(), SYSTEM_PROMPT)
+    *before, last = case["dialog"]
+    for text in before:
+        agent.run(text, lambda sentence: None)
+
+    first_response = len(chat.responses)
+    answer = agent.run(last, lambda sentence: None)
+
+    if "says" in case:
+        # Сравниваем с тем, что прозвучит: «42» озвучивается как «сорок два».
+        assert case["says"].lower() in normalize_for_speech(answer).lower(), f"ответ: {answer!r}"
+    else:
+        events = chat.responses[first_response]
+        calls = [event for event in events if isinstance(event, ToolCall)]
+        if not calls:
+            text = "".join(event.text for event in events if isinstance(event, TextDelta))
+            pytest.fail(f"модель ответила текстом: {text!r}")
+        check_first_call(calls, case["expect"])

@@ -20,6 +20,8 @@
   expect: {tool: open_app, args: {app: настройки}}
 - say: Открой браузер
   expect: {tool: open_app, args: {app: браузер}}
+- say: Открой Интернет Эксплорер
+  expect: {tool: open_app, args: {app: Интернет Эксплорер}}
 - say: Открой VS Code
   expect: {tool: open_app, args: {app: Visual Studio Code}}
 - say: Закрой блокнот.
@@ -70,6 +72,22 @@
   expect: {tool: web_search, args: {query: рецепт блинов}}
 - say: Поищи, кто такой Тесла.
   expect: {tool: web_search, args: {query: Тесла}}
+
+# Файлы, ввод, клавиши
+- say: Открой отчёт
+  expect: {tool: open_file, args: {name: отчёт}}
+- say: Открой файл список покупок
+  expect: {tool: open_file, args: {name: список покупок}}
+- say: Запусти Warframe
+  expect: {tool: open_app, args: {app: Warframe}}
+- say: Напечатай привет, как дела
+  expect: {tool: type_text, args: {text: привет, как дела}}
+- say: Сохрани
+  expect: {tool: press_keys, args: {keys: ctrl+s}}
+- say: Нажми энтер
+  expect: {tool: press_keys, args: {keys: enter}}
+- say: Закрой Steam
+  expect: {tool: close_app, args: {app: Steam}}
 
 # Система
 - say: Который час?
