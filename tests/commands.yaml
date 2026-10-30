@@ -107,6 +107,16 @@
 - say: Перезагрузи компьютер
   expect: {tool: power, args: {action: перезагрузить}}
 
+# Браузер и UI Automation
+- say: Прочти страницу пример.ком
+  expect: {tool: read_page, args: {url: пример.ком}}
+- say: Прочти https://yandex.ru
+  expect: {tool: read_page, args: {url: https://yandex.ru}}
+- say: Нажми кнопку отправить в браузере
+  expect: {tool: click_browser_element, args: {element: отправить}}
+- say: Нажми сохранить в блокноте
+  expect: {tool: click_control, args: {window: Блокнот, control: Сохранить}}
+
 # Разговор без инструментов
 - say: Привет, как дела?
   expect: null

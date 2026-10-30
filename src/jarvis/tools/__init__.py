@@ -3,6 +3,8 @@ from datetime import datetime
 
 from jarvis.config import Config
 from jarvis.tools import apps, files, keys, media, processes, system, web
+from jarvis.tools.browser_automation import register as register_browser
+from jarvis.tools.ui_automation import register as register_ui
 from jarvis.tools.registry import ToolRegistry
 
 
@@ -28,4 +30,6 @@ def build_registry(config: Config, preload: bool = False) -> ToolRegistry:
     media.register(registry, media.SystemVolume(), media.press_media_key)
     web.register(registry, config.web.search_url, webbrowser.open)
     system.register(registry, system.run_command, datetime.now)
+    register_browser(registry)
+    register_ui(registry)
     return registry
