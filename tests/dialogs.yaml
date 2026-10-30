@@ -23,3 +23,5 @@
   expect: {tool: type_text, args: {text: совещание в пятницу, window: отчёт}}
 - dialog: ["Открой блокнот", "Напиши список покупок: хлеб, молоко", "Сохрани"]
   expect: {tool: press_keys, args: {keys: ctrl+s}}
+- dialog: ["Прочти страницу пример.ком", "Расскажи подробнее"]
+  expect: {tool: read_page, args: {url: пример.ком}}

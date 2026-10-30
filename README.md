@@ -121,3 +121,4 @@ src/jarvis/
 |-------|----------|
 | `main` | рабочие версии всего проекта |
 | `keyrussfun` | KEYRUSSFUN |
+| `killerYouTuber` | killerYouTuber |
